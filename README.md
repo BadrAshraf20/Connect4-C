@@ -17,8 +17,6 @@ A classic Connect Four game implemented in C using the [Raylib](https://www.rayl
 
 This project is configured for Windows using MinGW. Ensure you have a C compiler (GCC) and the Raylib library installed.
 
-Run the following command in your terminal to compile the game:
-
 ## 🎮 How to Play
 1. Launch the game.
 2. Players take turns clicking on the column where they want to drop their piece.
@@ -28,5 +26,6 @@ Run the following command in your terminal to compile the game:
 **Badr Ashraf**
 *Computer and Systems Engineering Student*
 
+Run the following command in your terminal to compile the game:
 ```bash
 gcc Connect4.c -o connect4 -lraylib -lopengl32 -lgdi32 -lwinmm
