@@ -16,3 +16,15 @@ enum class GameMode {
     HumanVsAI,
     AIVsAI
 };
+
+enum class AIDifficulty {
+    Easy = 2,
+    Medium = 4,
+    Hard = 6
+};
+
+struct SessionScore {
+    int redWins = 0;
+    int yellowWins = 0;
+    int draws = 0;
+};

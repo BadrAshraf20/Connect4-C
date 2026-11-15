@@ -2,6 +2,7 @@
 #include "render.h"
 #include "config.h"
 #include <algorithm>
+#include <cmath>
 
 namespace {
     constexpr Color BG_COLOR        = { 15,  23,  42, 255 };
@@ -34,9 +35,19 @@ namespace {
         if (mode == GameMode::HumanVsAI) return turn == 1;
         return true;
     }
+
+    bool isWinningCell(const GameState& g, int r, int c) {
+        if (!g.gameOver) return false;
+        for (int i = 0; i < 4; i++) {
+            if (g.winCells[i][0] == r && g.winCells[i][1] == c) {
+                return true;
+            }
+        }
+        return false;
+    }
 }
 
-int drawMenu() {
+int drawMenu(AIDifficulty& difficulty) {
     int screenW = GetScreenWidth();
     int screenH = GetScreenHeight();
     Vector2 mouse = GetMousePosition();
@@ -45,11 +56,11 @@ int drawMenu() {
     BeginDrawing();
     ClearBackground(BG_COLOR);
 
-    DrawCircle(screenW / 2 - 340, screenH / 2 - 220, 180, { 239, 68, 68, 14 });
-    DrawCircle(screenW / 2 + 340, screenH / 2 + 220, 200, { 245, 158, 11, 14 });
+    DrawCircle(screenW / 2 - 340, screenH / 2 - 240, 180, { 239, 68, 68, 14 });
+    DrawCircle(screenW / 2 + 340, screenH / 2 + 240, 200, { 245, 158, 11, 14 });
 
     float containerW = 560.0f;
-    float containerH = 540.0f;
+    float containerH = 620.0f;
     float containerX = (screenW - containerW) / 2.0f;
     float containerY = (screenH - containerH) / 2.0f;
 
@@ -58,7 +69,7 @@ int drawMenu() {
     DrawRectangleRoundedLinesEx({ containerX, containerY, containerW, containerH }, 0.05f, 16, 2.0f, BOARD_BORDER);
 
     int cx = screenW / 2;
-    int headerY = (int)containerY + 42;
+    int headerY = (int)containerY + 38;
 
     drawToken(cx - 165, headerY + 22, 18.0f, RED_MAIN, RED_DARK, RED_LIGHT);
     drawToken(cx + 165, headerY + 22, 18.0f, YELLOW_MAIN, YELLOW_DARK, YELLOW_LIGHT);
@@ -66,9 +77,52 @@ int drawMenu() {
     const char* title = "CONNECT 4";
     DrawText(title, cx - MeasureText(title, 44) / 2, headerY, 44, RAYWHITE);
 
-    const char* subtitle = "Select a Game Mode to Start";
-    DrawText(subtitle, cx - MeasureText(subtitle, 20) / 2, headerY + 56, 20, LIGHTGRAY);
+    const char* subtitle = "Select AI Difficulty & Game Mode";
+    DrawText(subtitle, cx - MeasureText(subtitle, 19) / 2, headerY + 54, 19, LIGHTGRAY);
 
+    // AI Difficulty Pill Selector
+    float pillGroupW = containerW - 80.0f;
+    float pillGroupH = 46.0f;
+    float pillGroupX = containerX + 40.0f;
+    float pillGroupY = containerY + 132.0f;
+
+    DrawRectangleRounded({ pillGroupX, pillGroupY, pillGroupW, pillGroupH }, 0.25f, 12, SLOT_EMPTY);
+    DrawRectangleRoundedLinesEx({ pillGroupX, pillGroupY, pillGroupW, pillGroupH }, 0.25f, 12, 1.5f, BOARD_BORDER);
+
+    struct DiffItem {
+        const char* label;
+        AIDifficulty level;
+        Color activeColor;
+    };
+
+    DiffItem diffs[3] = {
+        { "Easy",   AIDifficulty::Easy,   { 34,  197, 94,  255 } },
+        { "Medium", AIDifficulty::Medium, { 245, 158, 11,  255 } },
+        { "Hard",   AIDifficulty::Hard,   { 239, 68,  68,  255 } }
+    };
+
+    float segW = (pillGroupW - 12.0f) / 3.0f;
+    for (int i = 0; i < 3; i++) {
+        Rectangle segRect = { pillGroupX + 6.0f + i * segW, pillGroupY + 5.0f, segW, pillGroupH - 10.0f };
+        bool active = (difficulty == diffs[i].level);
+        bool hovered = CheckCollisionPointRec(mouse, segRect);
+
+        if (active) {
+            DrawRectangleRounded(segRect, 0.25f, 10, diffs[i].activeColor);
+        } else if (hovered) {
+            DrawRectangleRounded(segRect, 0.25f, 10, CARD_HOVER);
+        }
+
+        Color txtColor = active ? BG_COLOR : (hovered ? RAYWHITE : LIGHTGRAY);
+        int txtW = MeasureText(diffs[i].label, 19);
+        DrawText(diffs[i].label, (int)(segRect.x + (segW - txtW) / 2.0f), (int)segRect.y + 8, 19, txtColor);
+
+        if (hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            difficulty = diffs[i].level;
+        }
+    }
+
+    // Three Game Mode Buttons
     struct MenuOption {
         const char* title;
         const char* desc;
@@ -83,10 +137,10 @@ int drawMenu() {
     };
 
     float btnW = containerW - 80.0f;
-    float btnH = 92.0f;
+    float btnH = 90.0f;
     float btnX = containerX + 40.0f;
-    float startY = containerY + 150.0f;
-    float spacing = 110.0f;
+    float startY = containerY + 202.0f;
+    float spacing = 108.0f;
 
     for (int i = 0; i < 3; i++) {
         Rectangle btnRect = { btnX, startY + i * spacing, btnW, btnH };
@@ -101,14 +155,14 @@ int drawMenu() {
         DrawText(options[i].desc,  (int)btnRect.x + 34, (int)btnRect.y + 52, 17, LIGHTGRAY);
 
         int badgeW = MeasureText(options[i].badge, 20);
-        DrawText(options[i].badge, (int)(btnRect.x + btnW - badgeW - 24), (int)btnRect.y + 36, 20, hovered ? options[i].accent : GRAY);
+        DrawText(options[i].badge, (int)(btnRect.x + btnW - badgeW - 24), (int)btnRect.y + 35, 20, hovered ? options[i].accent : GRAY);
 
         if (hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             selectedOption = i;
         }
     }
 
-    const char* footer = "Press [1-3] to Select  |  Press [ESC] to Quit";
+    const char* footer = "Press [1-3] to Start  |  Press [ESC] to Quit";
     DrawText(footer, cx - MeasureText(footer, 17) / 2, (int)(containerY + containerH - 36), 17, GRAY);
 
     EndDrawing();
@@ -122,7 +176,7 @@ BoardLayout getBoardLayout() {
     int panelW = 320;
     int gap = 60;
     int availW = screenW - panelW - gap * 3;
-    int availH = screenH - 140;
+    int availH = screenH - 160;
 
     int cellSize = std::min(availW / COLS, availH / ROWS);
     int boardW = cellSize * COLS;
@@ -131,16 +185,17 @@ BoardLayout getBoardLayout() {
     int totalGroupW = panelW + gap + boardW;
     int panelX = (screenW - totalGroupW) / 2;
     int boardX = panelX + panelW + gap;
-    int boardY = (screenH - boardH) / 2 + 15;
+    int boardY = (screenH - boardH) / 2 + 22;
 
     return { boardX, boardY, boardW, boardH, cellSize, panelX, panelW };
 }
 
-int drawGame(const GameState& g, GameMode mode, float humanTimer) {
+int drawGame(const GameState& g, GameMode mode, AIDifficulty difficulty, float humanTimer,
+             const SessionScore& score, int selectedCol) {
     BoardLayout layout = getBoardLayout();
     bool aiTurn = isCurrentTurnAI(g.turn, mode);
     Vector2 mouse = GetMousePosition();
-    int panelAction = 0; // 1 = Restart, 2 = Main Menu
+    int panelAction = 0;
 
     BeginDrawing();
     ClearBackground(BG_COLOR);
@@ -152,18 +207,22 @@ int drawGame(const GameState& g, GameMode mode, float humanTimer) {
     DrawRectangleRoundedLinesEx(panelRect, 0.05f, 16, 2.0f, BOARD_BORDER);
 
     int cx = layout.panelX + layout.panelW / 2;
-    int topY = layout.boardY + 35;
+    int topY = layout.boardY + 28;
 
     const char* gameTitle = "CONNECT 4";
-    DrawText(gameTitle, cx - MeasureText(gameTitle, 36) / 2, topY, 36, RAYWHITE);
+    DrawText(gameTitle, cx - MeasureText(gameTitle, 34) / 2, topY, 34, RAYWHITE);
 
+    const char* diffStr = (difficulty == AIDifficulty::Easy)   ? "EASY" :
+                          (difficulty == AIDifficulty::Medium) ? "MEDIUM" : "HARD";
     const char* modeLabel = (mode == GameMode::HumanVsHuman) ? "HUMAN VS HUMAN" :
-                            (mode == GameMode::HumanVsAI)    ? "HUMAN VS AI" : "AI VS AI";
-    DrawText(modeLabel, cx - MeasureText(modeLabel, 15) / 2, topY + 42, 15, SKYBLUE);
-    DrawLine(layout.panelX + 30, topY + 68, layout.panelX + layout.panelW - 30, topY + 68, BOARD_BORDER);
+                            (mode == GameMode::HumanVsAI)    ? TextFormat("HUMAN VS AI (%s)", diffStr) :
+                                                               TextFormat("AI VS AI (%s)", diffStr);
 
-    // Status / Winner Card
-    int statusY = topY + 95;
+    DrawText(modeLabel, cx - MeasureText(modeLabel, 15) / 2, topY + 38, 15, SKYBLUE);
+    DrawLine(layout.panelX + 28, topY + 62, layout.panelX + layout.panelW - 28, topY + 62, BOARD_BORDER);
+
+    // --- STATUS / WINNER SECTION ---
+    int statusY = topY + 80;
     if (!g.gameOver && !g.gameDraw) {
         Color activeColor = (g.turn == 0) ? RED_MAIN : YELLOW_MAIN;
         Color rimColor    = (g.turn == 0) ? RED_DARK : YELLOW_DARK;
@@ -179,7 +238,7 @@ int drawGame(const GameState& g, GameMode mode, float humanTimer) {
             DrawText(label, cx - MeasureText(label, 18) / 2, statusY, 18, LIGHTGRAY);
         }
 
-        drawToken(cx, statusY + 85, 38.0f, activeColor, rimColor, lightColor);
+        drawToken(cx, statusY + 72, 34.0f, activeColor, rimColor, lightColor);
 
         const char* playerStr = "RED";
         if (mode == GameMode::HumanVsAI) {
@@ -189,23 +248,21 @@ int drawGame(const GameState& g, GameMode mode, float humanTimer) {
         } else {
             playerStr = (g.turn == 0) ? "RED (P1)" : "YELLOW (P2)";
         }
-        DrawText(playerStr, cx - MeasureText(playerStr, 26) / 2, statusY + 140, 26, activeColor);
+        DrawText(playerStr, cx - MeasureText(playerStr, 24) / 2, statusY + 120, 24, activeColor);
+
         if (!aiTurn) {
-            float barW = (float)layout.panelW - 64.0f;
-            float barH = 12.0f;
-            float barX = (float)layout.panelX + 32.0f;
-            float barY = (float)statusY + 195.0f;
+            float barW = (float)layout.panelW - 56.0f;
+            float barH = 10.0f;
+            float barX = (float)layout.panelX + 28.0f;
+            float barY = (float)statusY + 185.0f;
 
             float ratio = std::max(0.0f, humanTimer / HUMAN_TURN_TIME);
             Color timerColor = (humanTimer <= 5.0f) ? RED_MAIN : SKYBLUE;
 
-            // Numeric countdown label
             const char* timeText = TextFormat("TIME LEFT: %.1fs", std::max(0.0f, humanTimer));
-            DrawText(timeText, cx - MeasureText(timeText, 18) / 2, (int)barY - 26, 18, timerColor);
+            DrawText(timeText, cx - MeasureText(timeText, 17) / 2, (int)barY - 24, 17, timerColor);
 
-            // Background track
             DrawRectangleRounded({ barX, barY, barW, barH }, 0.5f, 8, SLOT_EMPTY);
-            // Shrinking fill bar
             if (ratio > 0.0f) {
                 DrawRectangleRounded({ barX, barY, barW * ratio, barH }, 0.5f, 8, timerColor);
             }
@@ -219,46 +276,64 @@ int drawGame(const GameState& g, GameMode mode, float humanTimer) {
             resultColor = (g.winner == 'X') ? RED_MAIN : YELLOW_MAIN;
         }
 
-        // Result Banner
-        Rectangle resBox = { (float)layout.panelX + 24, (float)statusY, (float)layout.panelW - 48, 86.0f };
+        Rectangle resBox = { (float)layout.panelX + 24, (float)statusY, (float)layout.panelW - 48, 72.0f };
         DrawRectangleRounded(resBox, 0.16f, 12, SLOT_EMPTY);
         DrawRectangleRoundedLinesEx(resBox, 0.16f, 12, 2.0f, resultColor);
-        DrawText(resultTitle, cx - MeasureText(resultTitle, 30) / 2, statusY + 28, 30, resultColor);
+        DrawText(resultTitle, cx - MeasureText(resultTitle, 28) / 2, statusY + 22, 28, resultColor);
 
-        // --- CLICKABLE ACTION BUTTONS ---
         float btnX = (float)layout.panelX + 24;
         float btnW = (float)layout.panelW - 48;
-        float btnH = 52.0f;
+        float btnH = 44.0f;
 
-        // 1. Play Again Button
-        Rectangle restartBtn = { btnX, (float)statusY + 110.0f, btnW, btnH };
+        Rectangle restartBtn = { btnX, (float)statusY + 86.0f, btnW, btnH };
         bool hoverRestart = CheckCollisionPointRec(mouse, restartBtn);
         DrawRectangleRounded(restartBtn, 0.22f, 12, hoverRestart ? BTN_PRIM_HOVER : BTN_PRIMARY);
         const char* restartText = "Play Again  [R]";
-        DrawText(restartText, cx - MeasureText(restartText, 20) / 2, (int)restartBtn.y + 16, 20, RAYWHITE);
+        DrawText(restartText, cx - MeasureText(restartText, 19) / 2, (int)restartBtn.y + 13, 19, RAYWHITE);
         if (hoverRestart && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             panelAction = 1;
         }
 
-        // 2. Main Menu Button
-        Rectangle menuBtn = { btnX, (float)statusY + 176.0f, btnW, btnH };
+        Rectangle menuBtn = { btnX, (float)statusY + 140.0f, btnW, btnH };
         bool hoverMenu = CheckCollisionPointRec(mouse, menuBtn);
         DrawRectangleRounded(menuBtn, 0.22f, 12, hoverMenu ? CARD_HOVER : SLOT_EMPTY);
         DrawRectangleRoundedLinesEx(menuBtn, 0.22f, 12, 1.5f, hoverMenu ? RAYWHITE : BOARD_BORDER);
         const char* menuText = "Main Menu  [M]";
-        DrawText(menuText, cx - MeasureText(menuText, 20) / 2, (int)menuBtn.y + 16, 20, RAYWHITE);
+        DrawText(menuText, cx - MeasureText(menuText, 19) / 2, (int)menuBtn.y + 13, 19, RAYWHITE);
         if (hoverMenu && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             panelAction = 2;
         }
     }
 
-    // Bottom Navigation Hints
-    if (!g.gameOver && !g.gameDraw) {
-        const char* menuHint = "Press [M] for Main Menu";
-        DrawText(menuHint, cx - MeasureText(menuHint, 17) / 2, layout.boardY + layout.boardH - 65, 17, LIGHTGRAY);
+    // --- SESSION SCOREBOARD CARD ---
+    float sbW = (float)layout.panelW - 48.0f;
+    float sbH = 74.0f;
+    float sbX = (float)layout.panelX + 24.0f;
+    float sbY = (float)(layout.boardY + layout.boardH) - 135.0f;
+
+    DrawRectangleRounded({ sbX, sbY, sbW, sbH }, 0.18f, 12, SLOT_EMPTY);
+    DrawRectangleRoundedLinesEx({ sbX, sbY, sbW, sbH }, 0.18f, 12, 1.5f, BOARD_BORDER);
+
+    float colW = sbW / 3.0f;
+    const char* sbHeaders[3] = { "RED", "DRAW", "YELLOW" };
+    int sbValues[3]          = { score.redWins, score.draws, score.yellowWins };
+    Color sbColors[3]        = { RED_MAIN, LIGHTGRAY, YELLOW_MAIN };
+
+    for (int i = 0; i < 3; i++) {
+        int subCx = (int)(sbX + colW * i + colW / 2.0f);
+        DrawText(sbHeaders[i], subCx - MeasureText(sbHeaders[i], 13) / 2, (int)sbY + 12, 13, sbColors[i]);
+        const char* valStr = TextFormat("%d", sbValues[i]);
+        DrawText(valStr, subCx - MeasureText(valStr, 26) / 2, (int)sbY + 34, 26, RAYWHITE);
+
+        if (i < 2) {
+            int divX = (int)(sbX + colW * (i + 1));
+            DrawLine(divX, (int)sbY + 14, divX, (int)(sbY + sbH - 14), BOARD_BORDER);
+        }
     }
-    const char* quitHint = "Press [ESC] to Exit";
-    DrawText(quitHint, cx - MeasureText(quitHint, 17) / 2, layout.boardY + layout.boardH - 38, 17, GRAY);
+
+    // Bottom Navigation Hints
+    const char* navHint = "[1-7 / Arrows] Drop  |  [M] Menu";
+    DrawText(navHint, cx - MeasureText(navHint, 15) / 2, layout.boardY + layout.boardH - 42, 15, GRAY);
 
     // --- RIGHT SIDE: BOARD CHASSIS ---
     Rectangle boardRect = {
@@ -269,25 +344,30 @@ int drawGame(const GameState& g, GameMode mode, float humanTimer) {
     DrawRectangleRounded(boardRect, 0.04f, 16, BOARD_BODY);
     DrawRectangleRoundedLinesEx(boardRect, 0.04f, 16, 2.0f, BOARD_BORDER);
 
-    // Column Hover Preview
-    if (!g.gameOver && !g.gameDraw && !aiTurn) {
-        int mouseX = GetMouseX();
-        int hoverCol = (mouseX - layout.boardX) / layout.cellSize;
+    // Column Numbers (1..7) & Active Column Selector Preview
+    for (int c = 0; c < COLS; c++) {
+        int colCenterX = layout.boardX + c * layout.cellSize + layout.cellSize / 2;
+        bool isSelected = (!g.gameOver && !g.gameDraw && !aiTurn && c == selectedCol);
 
-        if (mouseX >= layout.boardX && hoverCol >= 0 && hoverCol < COLS && g.board[0][hoverCol] == '.') {
-            int colX = layout.boardX + hoverCol * layout.cellSize;
-            DrawRectangle(colX + 4, layout.boardY, layout.cellSize - 8, layout.boardH, { 255, 255, 255, 12 });
+        const char* colNum = TextFormat("%d", c + 1);
+        Color numColor = isSelected ? RAYWHITE : GRAY;
+        DrawText(colNum, colCenterX - MeasureText(colNum, 16) / 2, layout.boardY - 52, 16, numColor);
 
-            int previewX = colX + layout.cellSize / 2;
-            int previewY = layout.boardY - 26;
+        if (isSelected && g.board[0][c] == '.') {
+            int colX = layout.boardX + c * layout.cellSize;
+            DrawRectangle(colX + 4, layout.boardY, layout.cellSize - 8, layout.boardH, { 255, 255, 255, 14 });
+
+            int previewY = layout.boardY - 24;
             Color ghostColor = (g.turn == 0) ? RED_MAIN : YELLOW_MAIN;
-            ghostColor.a = 180;
-            DrawCircle(previewX, previewY, layout.cellSize * 0.18f, ghostColor);
+            ghostColor.a = 190;
+            DrawCircle(colCenterX, previewY, layout.cellSize * 0.16f, ghostColor);
         }
     }
 
     // Board Grid & Tokens
     const float radius = layout.cellSize * 0.40f;
+    float pulse = 0.5f + 0.5f * std::sin((float)GetTime() * 6.0f);
+
     for (int r = 0; r < ROWS; r++) {
         for (int c = 0; c < COLS; c++) {
             int x = layout.boardX + c * layout.cellSize + layout.cellSize / 2;
@@ -301,7 +381,22 @@ int drawGame(const GameState& g, GameMode mode, float humanTimer) {
             } else if (g.board[r][c] == 'O') {
                 drawToken(x, y, radius, YELLOW_MAIN, YELLOW_DARK, YELLOW_LIGHT);
             }
+
+            if (isWinningCell(g, r, c)) {
+                unsigned char alpha = (unsigned char)(170 + 85 * pulse);
+                Color ringColor = { 255, 255, 255, alpha };
+                DrawRing({ (float)x, (float)y }, radius + 1.0f, radius + 6.0f + pulse * 2.0f, 0.0f, 360.0f, 36, ringColor);
+            }
         }
+    }
+
+    if (g.gameOver && g.winCells[0][0] != -1) {
+        int x1 = layout.boardX + g.winCells[0][1] * layout.cellSize + layout.cellSize / 2;
+        int y1 = layout.boardY + g.winCells[0][0] * layout.cellSize + layout.cellSize / 2;
+        int x2 = layout.boardX + g.winCells[3][1] * layout.cellSize + layout.cellSize / 2;
+        int y2 = layout.boardY + g.winCells[3][0] * layout.cellSize + layout.cellSize / 2;
+
+        DrawLineEx({ (float)x1, (float)y1 }, { (float)x2, (float)y2 }, 6.0f, { 255, 255, 255, 210 });
     }
 
     EndDrawing();

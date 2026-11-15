@@ -1,4 +1,5 @@
 #pragma once
 
-// Returns the clicked column, or -1 if there was no click
-int getClickedColumn();
+// Updates `selectedCol` from mouse movement or arrow keys,
+// and returns the chosen column (0 to COLS - 1) if confirmed, or -1 otherwise.
+int getSelectedColumn(int& selectedCol);

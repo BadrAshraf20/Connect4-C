@@ -5,6 +5,8 @@
 #include "render.h"
 #include "audio.h"
 #include "ai.h"
+#include <cmath>
+#include <algorithm>
 
 namespace {
     int getRandomValidColumn(const char board[ROWS][COLS]) {
@@ -26,6 +28,8 @@ int main() {
 
     ScreenState screen = ScreenState::Menu;
     GameMode mode = GameMode::HumanVsAI;
+    AIDifficulty difficulty = AIDifficulty::Hard;
+    SessionScore score{};
 
     SetConfigFlags(FLAG_FULLSCREEN_MODE | FLAG_MSAA_4X_HINT);
     int monitor = GetCurrentMonitor();
@@ -35,10 +39,12 @@ int main() {
 
     float aiTimer = 0.0f;
     float humanTimer = HUMAN_TURN_TIME;
+    int selectedCol = COLS / 2;
+    bool roundRecorded = false;
 
     while (!WindowShouldClose()) {
         if (screen == ScreenState::Menu) {
-            int choice = drawMenu();
+            int choice = drawMenu(difficulty);
             if (IsKeyPressed(KEY_ONE))   choice = 0;
             if (IsKeyPressed(KEY_TWO))   choice = 1;
             if (IsKeyPressed(KEY_THREE)) choice = 2;
@@ -46,9 +52,12 @@ int main() {
             if (choice != -1) {
                 mode = (choice == 0) ? GameMode::HumanVsHuman :
                        (choice == 1) ? GameMode::HumanVsAI : GameMode::AIVsAI;
+                score = SessionScore{}; // Fresh scoreboard when starting a new mode
                 initGame(game);
                 aiTimer = (mode == GameMode::AIVsAI) ? 0.65f : 0.0f;
                 humanTimer = HUMAN_TURN_TIME;
+                selectedCol = COLS / 2;
+                roundRecorded = false;
                 screen = ScreenState::Playing;
             }
         }
@@ -58,16 +67,24 @@ int main() {
                                 (mode == GameMode::HumanVsAI && game.turn == 1);
 
                 if (!isAITurn) {
+                    float prevTimer = humanTimer;
                     humanTimer -= GetFrameTime();
 
-                    int col = getClickedColumn();
-                    // If time runs out, pick a random valid column automatically
+                    if (humanTimer > 0.0f && humanTimer <= 5.0f) {
+                        int prevSec = (int)std::ceil(prevTimer);
+                        int currSec = (int)std::ceil(humanTimer);
+                        if (currSec < prevSec) {
+                            playTickSound(currSec == 1);
+                        }
+                    }
+
+                    int col = getSelectedColumn(selectedCol);
                     if (humanTimer <= 0.0f) {
                         col = getRandomValidColumn(game.board);
                     }
 
                     if (col != -1 && playTurn(game, col)) {
-                        humanTimer = HUMAN_TURN_TIME; // Reset timer for next human turn
+                        humanTimer = HUMAN_TURN_TIME;
                         if (mode == GameMode::HumanVsAI) {
                             aiTimer = GetRandomValue(60, 110) / 100.0f;
                         }
@@ -76,11 +93,15 @@ int main() {
                     aiTimer -= GetFrameTime();
                     if (aiTimer <= 0.0f) {
                         char aiPiece = (game.turn == 0) ? 'X' : 'O';
-                        int depth = (mode == GameMode::AIVsAI && game.turn == 0) ? 5 : 6;
+                        int baseDepth = static_cast<int>(difficulty);
+                        int depth = (mode == GameMode::AIVsAI && game.turn == 0)
+                                    ? std::max(1, baseDepth - 1)
+                                    : baseDepth;
+
                         int aiCol = getBestMove(game.board, aiPiece, depth);
 
                         if (aiCol != -1 && playTurn(game, aiCol)) {
-                            humanTimer = HUMAN_TURN_TIME; // Reset timer when passing back to human
+                            humanTimer = HUMAN_TURN_TIME;
                             if (mode == GameMode::AIVsAI) {
                                 aiTimer = GetRandomValue(65, 110) / 100.0f;
                             }
@@ -89,12 +110,25 @@ int main() {
                 }
             }
 
-            int action = drawGame(game, mode, humanTimer);
+            // Record match outcome into SessionScore once per round
+            if (!roundRecorded && (game.gameOver || game.gameDraw)) {
+                if (game.gameOver) {
+                    if (game.winner == 'X') score.redWins++;
+                    else if (game.winner == 'O') score.yellowWins++;
+                } else {
+                    score.draws++;
+                }
+                roundRecorded = true;
+            }
+
+            int action = drawGame(game, mode, difficulty, humanTimer, score, selectedCol);
 
             if ((game.gameOver || game.gameDraw) && (action == 1 || IsKeyPressed(KEY_R))) {
                 initGame(game);
                 aiTimer = (mode == GameMode::AIVsAI) ? 0.65f : 0.0f;
                 humanTimer = HUMAN_TURN_TIME;
+                selectedCol = COLS / 2;
+                roundRecorded = false;
             }
             else if (action == 2 || IsKeyPressed(KEY_M)) {
                 screen = ScreenState::Menu;
