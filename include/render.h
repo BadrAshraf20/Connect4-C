@@ -13,7 +13,8 @@ struct BoardLayout {
 };
 
 BoardLayout getBoardLayout();
-int drawMenu(AIDifficulty& difficulty);
-// Returns: 0 = none, 1 = Play Again, 2 = Main Menu, 3 = Hint Requested
-int drawGame(const GameState& g, GameMode mode, AIDifficulty difficulty, float humanTimer,
-             const SessionScore& score, int selectedCol, int hintsLeft, int hintCol);
+int drawMenu(AIAlgorithm& algorithm, AIDifficulty& difficulty, int& customK);
+int drawGame(const GameState& g, GameMode mode, AIAlgorithm algorithm, int activeK,
+             float humanTimer, const SessionScore& score, int selectedCol,
+             int hintsLeft, int hintCol, const SearchStats& lastStats,
+             bool showTreeOverlay, float& treeScrollY);

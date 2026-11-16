@@ -1,4 +1,6 @@
 #pragma once
+#include <string>
+#include <vector>
 
 constexpr int ROWS = 6;
 constexpr int COLS = 7;
@@ -18,14 +20,37 @@ enum class GameMode {
     AIVsAI
 };
 
+enum class AIAlgorithm {
+    AlphaBeta,
+    PlainMinimax
+};
+
 enum class AIDifficulty {
     Easy = 2,
     Medium = 4,
-    Hard = 6
+    Hard = 6,
+    Custom = 0
 };
 
 struct SessionScore {
     int redWins = 0;
     int yellowWins = 0;
     int draws = 0;
+};
+
+struct TreeDisplayLine {
+    int level = 0;
+    std::string text;
+    int score = 0;
+    bool isPruned = false;
+    bool isChosen = false;
+};
+
+struct SearchStats {
+    long long nodesExpanded = 0;
+    double timeMs = 0.0;
+    int chosenCol = -1;
+    int bestScore = 0;
+    std::string algoSummary;
+    std::vector<TreeDisplayLine> treeLines;
 };

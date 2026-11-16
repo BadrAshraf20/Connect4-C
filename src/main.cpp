@@ -20,6 +20,11 @@ namespace {
         if (count == 0) return -1;
         return validCols[GetRandomValue(0, count - 1)];
     }
+
+    int getEffectiveDepth(AIDifficulty diff, int customK) {
+        if (diff == AIDifficulty::Custom) return customK;
+        return static_cast<int>(diff);
+    }
 }
 
 int main() {
@@ -28,8 +33,12 @@ int main() {
 
     ScreenState screen = ScreenState::Menu;
     GameMode mode = GameMode::HumanVsAI;
-    AIDifficulty difficulty = AIDifficulty::Hard;
+    AIAlgorithm algorithm = AIAlgorithm::AlphaBeta;
+    AIDifficulty difficulty = AIDifficulty::Medium;
+    int customK = 5;
+
     SessionScore score{};
+    SearchStats lastStats{};
 
     SetConfigFlags(FLAG_FULLSCREEN_MODE | FLAG_MSAA_4X_HINT);
     int monitor = GetCurrentMonitor();
@@ -45,9 +54,14 @@ int main() {
     int hintsRemaining[2] = { MAX_HINTS_PER_PLAYER, MAX_HINTS_PER_PLAYER };
     int hintCol = -1;
 
+    bool showTreeOverlay = false;
+    float treeScrollY = 0.0f;
+
     while (!WindowShouldClose()) {
+        int activeK = getEffectiveDepth(difficulty, customK);
+
         if (screen == ScreenState::Menu) {
-            int choice = drawMenu(difficulty);
+            int choice = drawMenu(algorithm, difficulty, customK);
             if (IsKeyPressed(KEY_ONE))   choice = 0;
             if (IsKeyPressed(KEY_TWO))   choice = 1;
             if (IsKeyPressed(KEY_THREE)) choice = 2;
@@ -56,6 +70,7 @@ int main() {
                 mode = (choice == 0) ? GameMode::HumanVsHuman :
                        (choice == 1) ? GameMode::HumanVsAI : GameMode::AIVsAI;
                 score = SessionScore{};
+                lastStats = SearchStats{};
                 initGame(game);
                 aiTimer = (mode == GameMode::AIVsAI) ? 0.65f : 0.0f;
                 humanTimer = HUMAN_TURN_TIME;
@@ -64,6 +79,8 @@ int main() {
                 hintsRemaining[0] = MAX_HINTS_PER_PLAYER;
                 hintsRemaining[1] = MAX_HINTS_PER_PLAYER;
                 hintCol = -1;
+                showTreeOverlay = false;
+                treeScrollY = 0.0f;
                 screen = ScreenState::Playing;
             }
         }
@@ -71,7 +88,7 @@ int main() {
             bool isAITurn = (mode == GameMode::AIVsAI) ||
                             (mode == GameMode::HumanVsAI && game.turn == 1);
 
-            if (!game.gameOver && !game.gameDraw) {
+            if (!game.gameOver && !game.gameDraw && !showTreeOverlay) {
                 if (!isAITurn) {
                     float prevTimer = humanTimer;
                     humanTimer -= GetFrameTime();
@@ -91,7 +108,7 @@ int main() {
 
                     if (col != -1 && playTurn(game, col)) {
                         humanTimer = HUMAN_TURN_TIME;
-                        hintCol = -1; // Clear active hint after move
+                        hintCol = -1;
                         if (mode == GameMode::HumanVsAI) {
                             aiTimer = GetRandomValue(60, 110) / 100.0f;
                         }
@@ -100,12 +117,11 @@ int main() {
                     aiTimer -= GetFrameTime();
                     if (aiTimer <= 0.0f) {
                         char aiPiece = (game.turn == 0) ? 'X' : 'O';
-                        int baseDepth = static_cast<int>(difficulty);
                         int depth = (mode == GameMode::AIVsAI && game.turn == 0)
-                                    ? std::max(1, baseDepth - 1)
-                                    : baseDepth;
+                                    ? std::max(1, activeK - 1)
+                                    : activeK;
 
-                        int aiCol = getBestMove(game.board, aiPiece, depth);
+                        int aiCol = getBestMove(game.board, aiPiece, depth, algorithm, &lastStats, true);
 
                         if (aiCol != -1 && playTurn(game, aiCol)) {
                             humanTimer = HUMAN_TURN_TIME;
@@ -129,14 +145,20 @@ int main() {
             }
 
             int activeHints = (!isAITurn) ? hintsRemaining[game.turn] : 0;
-            int action = drawGame(game, mode, difficulty, humanTimer, score, selectedCol, activeHints, hintCol);
+            int action = drawGame(game, mode, algorithm, activeK, humanTimer, score,
+                                  selectedCol, activeHints, hintCol, lastStats,
+                                  showTreeOverlay, treeScrollY);
 
-            // Handle Hint Request via button click or [H]
-            if (!game.gameOver && !game.gameDraw && !isAITurn &&
+            if (mode != GameMode::HumanVsHuman && (action == 4 || IsKeyPressed(KEY_T))) {
+                showTreeOverlay = !showTreeOverlay;
+                if (showTreeOverlay) treeScrollY = 0.0f;
+            }
+
+            if (!showTreeOverlay && !game.gameOver && !game.gameDraw && !isAITurn &&
                 (action == 3 || IsKeyPressed(KEY_H))) {
                 if (hintsRemaining[game.turn] > 0 && hintCol == -1) {
                     char playerPiece = (game.turn == 0) ? 'X' : 'O';
-                    hintCol = getBestMove(game.board, playerPiece, 6);
+                    hintCol = getBestMove(game.board, playerPiece, 6, AIAlgorithm::AlphaBeta, nullptr, false);
                     if (hintCol != -1) {
                         selectedCol = hintCol;
                         hintsRemaining[game.turn]--;
@@ -144,8 +166,9 @@ int main() {
                 }
             }
 
-            if ((game.gameOver || game.gameDraw) && (action == 1 || IsKeyPressed(KEY_R))) {
+            if (!showTreeOverlay && (game.gameOver || game.gameDraw) && (action == 1 || IsKeyPressed(KEY_R))) {
                 initGame(game);
+                lastStats = SearchStats{};
                 aiTimer = (mode == GameMode::AIVsAI) ? 0.65f : 0.0f;
                 humanTimer = HUMAN_TURN_TIME;
                 selectedCol = COLS / 2;
@@ -154,7 +177,7 @@ int main() {
                 hintsRemaining[1] = MAX_HINTS_PER_PLAYER;
                 hintCol = -1;
             }
-            else if (action == 2 || IsKeyPressed(KEY_M)) {
+            else if (!showTreeOverlay && (action == 2 || IsKeyPressed(KEY_M))) {
                 screen = ScreenState::Menu;
             }
         }
