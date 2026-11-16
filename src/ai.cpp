@@ -19,47 +19,6 @@ namespace {
         std::vector<TreeNode> children;
     };
 
-    bool hasPlayerWon(const char board[ROWS][COLS], char piece) {
-        // Horizontal
-        for (int r = 0; r < ROWS; r++) {
-            for (int c = 0; c <= COLS - 4; c++) {
-                if (board[r][c] == piece && board[r][c + 1] == piece &&
-                    board[r][c + 2] == piece && board[r][c + 3] == piece) {
-                    return true;
-                }
-            }
-        }
-        // Vertical
-        for (int r = 0; r <= ROWS - 4; r++) {
-            for (int c = 0; c < COLS; c++) {
-                if (board[r][c] == piece && board[r + 1][c] == piece &&
-                    board[r + 2][c] == piece && board[r + 3][c] == piece) {
-                    return true;
-                }
-            }
-        }
-        // Diagonal down-right
-        for (int r = 0; r <= ROWS - 4; r++) {
-            for (int c = 0; c <= COLS - 4; c++) {
-                if (board[r][c] == piece && board[r + 1][c + 1] == piece &&
-                    board[r + 2][c + 2] == piece && board[r + 3][c + 3] == piece) {
-                    return true;
-                }
-            }
-        }
-        // Diagonal up-right
-        for (int r = 3; r < ROWS; r++) {
-            for (int c = 0; c <= COLS - 4; c++) {
-                if (board[r][c] == piece && board[r - 1][c + 1] == piece &&
-                    board[r - 2][c + 2] == piece && board[r - 3][c + 3] == piece) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    // Note: dropPiece(board, col, piece) is already declared in game.h
     void undoPiece(char board[ROWS][COLS], int col) {
         for (int r = 0; r < ROWS; r++) {
             if (board[r][col] != '.') {
@@ -80,37 +39,54 @@ namespace {
             else emptyCount++;
         }
 
+        // Completed 4-in-a-row sequences
         if (aiCount == 4) return 1000;
-        if (aiCount == 3 && emptyCount == 1) return 12;
-        if (aiCount == 2 && emptyCount == 2) return 3;
+        if (oppCount == 4) return -1050;
 
-        if (oppCount == 4) return -1000;
-        if (oppCount == 3 && emptyCount == 1) return -15;
-        if (oppCount == 2 && emptyCount == 2) return -3;
+        // Candidate threat windows
+        if (aiCount == 3 && emptyCount == 1) return 25;
+        if (aiCount == 2 && emptyCount == 2) return 5;
+
+        if (oppCount == 3 && emptyCount == 1) return -28;
+        if (oppCount == 2 && emptyCount == 2) return -5;
 
         return 0;
     }
 
     int minimax(char board[ROWS][COLS], int depth, int treeLevel, int alpha, int beta,
-                bool isMaximizing, char aiPiece, bool usePruning, long long& nodes, TreeNode* node) {
+                bool isMaximizing, char aiPiece, bool usePruning, GameRules rules,
+                long long& nodes, TreeNode* node) {
         nodes++;
         char oppPiece = (aiPiece == 'X') ? 'O' : 'X';
 
-        // Terminal state checks
-        if (hasPlayerWon(board, aiPiece)) {
-            int val = 100000 + depth; // Prefer faster wins
-            if (node) node->score = val;
-            return val;
+        // In Classic FirstFour mode, stop immediately on the first 4-in-a-row
+        if (rules == GameRules::FirstFour) {
+            if (countConnectFours(board, aiPiece) > 0) {
+                int val = 100000 + depth;
+                if (node) node->score = val;
+                return val;
+            }
+            if (countConnectFours(board, oppPiece) > 0) {
+                int val = -100000 - depth;
+                if (node) node->score = val;
+                return val;
+            }
         }
-        if (hasPlayerWon(board, oppPiece)) {
-            int val = -100000 - depth; // Delay losses as long as possible
-            if (node) node->score = val;
-            return val;
-        }
+
+        // Board full terminal state
         if (checkDraw(board) == 1) {
+            if (rules == GameRules::FullBoard) {
+                int aiFours  = countConnectFours(board, aiPiece);
+                int oppFours = countConnectFours(board, oppPiece);
+                int val = (aiFours - oppFours) * 10000;
+                if (node) node->score = val;
+                return val;
+            }
             if (node) node->score = 0;
             return 0;
         }
+
+        // Heuristic cutoff at depth K
         if (depth == 0) {
             int val = evaluateBoard(board, aiPiece);
             if (node) node->score = val;
@@ -130,7 +106,7 @@ namespace {
                     }
 
                     dropPiece(board, col, aiPiece);
-                    int eval = minimax(board, depth - 1, treeLevel + 1, alpha, beta, false, aiPiece, usePruning, nodes, childPtr);
+                    int eval = minimax(board, depth - 1, treeLevel + 1, alpha, beta, false, aiPiece, usePruning, rules, nodes, childPtr);
                     undoPiece(board, col);
 
                     maxEval = std::max(maxEval, eval);
@@ -140,7 +116,7 @@ namespace {
                             if (recordChildren) {
                                 node->children.push_back({ "PRUNED (beta <= alpha)", 0, true, -1, {} });
                             }
-                            break; // Beta cutoff
+                            break;
                         }
                     }
                 }
@@ -158,7 +134,7 @@ namespace {
                     }
 
                     dropPiece(board, col, oppPiece);
-                    int eval = minimax(board, depth - 1, treeLevel + 1, alpha, beta, true, aiPiece, usePruning, nodes, childPtr);
+                    int eval = minimax(board, depth - 1, treeLevel + 1, alpha, beta, true, aiPiece, usePruning, rules, nodes, childPtr);
                     undoPiece(board, col);
 
                     minEval = std::min(minEval, eval);
@@ -168,7 +144,7 @@ namespace {
                             if (recordChildren) {
                                 node->children.push_back({ "PRUNED (beta <= alpha)", 0, true, -1, {} });
                             }
-                            break; // Alpha cutoff
+                            break;
                         }
                     }
                 }
@@ -211,13 +187,17 @@ int evaluateBoard(char board[ROWS][COLS], char aiPiece) {
     char oppPiece = (aiPiece == 'X') ? 'O' : 'X';
     int score = 0;
 
+    // 1. Center & inner-column positional control
     int centerCol = COLS / 2;
-    int centerCount = 0;
     for (int r = 0; r < ROWS; r++) {
-        if (board[r][centerCol] == aiPiece) centerCount++;
-    }
-    score += centerCount * 6;
+        if (board[r][centerCol] == aiPiece) score += 6;
+        else if (board[r][centerCol] == oppPiece) score -= 6;
 
+        if (board[r][centerCol - 1] == aiPiece || board[r][centerCol + 1] == aiPiece) score += 3;
+        if (board[r][centerCol - 1] == oppPiece || board[r][centerCol + 1] == oppPiece) score -= 3;
+    }
+
+    // 2. Evaluate all 69 four-cell windows (includes completed 4-in-a-rows + candidate threats)
     char window[4];
 
     for (int r = 0; r < ROWS; r++) {
@@ -252,7 +232,7 @@ int evaluateBoard(char board[ROWS][COLS], char aiPiece) {
 }
 
 int getBestMove(char board[ROWS][COLS], char aiPiece, int maxDepth,
-                AIAlgorithm algo, SearchStats* outStats, bool printTree) {
+                AIAlgorithm algo, GameRules rules, SearchStats* outStats, bool printTree) {
     int bestScore = INT_MIN;
     int bestCol = -1;
     int alpha = INT_MIN;
@@ -276,7 +256,7 @@ int getBestMove(char board[ROWS][COLS], char aiPiece, int maxDepth,
             }
 
             dropPiece(board, col, aiPiece);
-            int score = minimax(board, maxDepth - 1, 1, alpha, beta, false, aiPiece, usePruning, nodesExpanded, childPtr);
+            int score = minimax(board, maxDepth - 1, 1, alpha, beta, false, aiPiece, usePruning, rules, nodesExpanded, childPtr);
             undoPiece(board, col);
 
             if (score > bestScore) {
@@ -293,6 +273,7 @@ int getBestMove(char board[ROWS][COLS], char aiPiece, int maxDepth,
     double elapsedMs = std::chrono::duration<double, std::milli>(endTime - startTime).count();
 
     const char* algoName = usePruning ? "Minimax + Alpha-Beta Pruning" : "Plain Minimax (No Pruning)";
+    const char* ruleName = (rules == GameRules::FullBoard) ? "Full Board" : "First 4";
     root.score = bestScore;
 
     if (outStats) {
@@ -300,14 +281,15 @@ int getBestMove(char board[ROWS][COLS], char aiPiece, int maxDepth,
         outStats->timeMs = elapsedMs;
         outStats->chosenCol = bestCol;
         outStats->bestScore = bestScore;
-        outStats->algoSummary = std::string(algoName) + "  |  K = " + std::to_string(maxDepth) +
+        outStats->algoSummary = std::string(algoName) + "  |  " + ruleName +
+                                "  |  K = " + std::to_string(maxDepth) +
                                 "  |  Chosen Col " + std::to_string(bestCol + 1);
         outStats->treeLines.clear();
     }
 
     if (printTree) {
         std::cout << "\n======================================================\n";
-        std::cout << "Algorithm: " << algoName << " | Depth K = " << maxDepth << "\n";
+        std::cout << "Algorithm: " << algoName << " | Rules: " << ruleName << " | Depth K = " << maxDepth << "\n";
         std::cout << "Chosen Column: " << (bestCol + 1) << " | Best Score: " << bestScore
                   << " | Nodes Expanded: " << nodesExpanded
                   << " | Time: " << elapsedMs << " ms\n";

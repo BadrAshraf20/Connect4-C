@@ -20,6 +20,11 @@ enum class GameMode {
     AIVsAI
 };
 
+enum class GameRules {
+    FullBoard, // Lab 2 requirement: play until board is full, highest connected-fours wins
+    FirstFour  // Classic Connect 4: game ends on the first 4-in-a-row
+};
+
 enum class AIAlgorithm {
     AlphaBeta,
     PlainMinimax

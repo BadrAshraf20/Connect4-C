@@ -33,6 +33,7 @@ int main() {
 
     ScreenState screen = ScreenState::Menu;
     GameMode mode = GameMode::HumanVsAI;
+    GameRules rules = GameRules::FullBoard;
     AIAlgorithm algorithm = AIAlgorithm::AlphaBeta;
     AIDifficulty difficulty = AIDifficulty::Medium;
     int customK = 5;
@@ -61,7 +62,7 @@ int main() {
         int activeK = getEffectiveDepth(difficulty, customK);
 
         if (screen == ScreenState::Menu) {
-            int choice = drawMenu(algorithm, difficulty, customK);
+            int choice = drawMenu(rules, algorithm, difficulty, customK);
             if (IsKeyPressed(KEY_ONE))   choice = 0;
             if (IsKeyPressed(KEY_TWO))   choice = 1;
             if (IsKeyPressed(KEY_THREE)) choice = 2;
@@ -106,7 +107,7 @@ int main() {
                         col = getRandomValidColumn(game.board);
                     }
 
-                    if (col != -1 && playTurn(game, col)) {
+                    if (col != -1 && playTurn(game, col, rules)) {
                         humanTimer = HUMAN_TURN_TIME;
                         hintCol = -1;
                         if (mode == GameMode::HumanVsAI) {
@@ -121,9 +122,9 @@ int main() {
                                     ? std::max(1, activeK - 1)
                                     : activeK;
 
-                        int aiCol = getBestMove(game.board, aiPiece, depth, algorithm, &lastStats, true);
+                        int aiCol = getBestMove(game.board, aiPiece, depth, algorithm, rules, &lastStats, true);
 
-                        if (aiCol != -1 && playTurn(game, aiCol)) {
+                        if (aiCol != -1 && playTurn(game, aiCol, rules)) {
                             humanTimer = HUMAN_TURN_TIME;
                             hintCol = -1;
                             if (mode == GameMode::AIVsAI) {
@@ -145,7 +146,7 @@ int main() {
             }
 
             int activeHints = (!isAITurn) ? hintsRemaining[game.turn] : 0;
-            int action = drawGame(game, mode, algorithm, activeK, humanTimer, score,
+            int action = drawGame(game, mode, rules, algorithm, activeK, humanTimer, score,
                                   selectedCol, activeHints, hintCol, lastStats,
                                   showTreeOverlay, treeScrollY);
 
@@ -158,7 +159,7 @@ int main() {
                 (action == 3 || IsKeyPressed(KEY_H))) {
                 if (hintsRemaining[game.turn] > 0 && hintCol == -1) {
                     char playerPiece = (game.turn == 0) ? 'X' : 'O';
-                    hintCol = getBestMove(game.board, playerPiece, 6, AIAlgorithm::AlphaBeta, nullptr, false);
+                    hintCol = getBestMove(game.board, playerPiece, 6, AIAlgorithm::AlphaBeta, rules, nullptr, false);
                     if (hintCol != -1) {
                         selectedCol = hintCol;
                         hintsRemaining[game.turn]--;

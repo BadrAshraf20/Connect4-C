@@ -3,19 +3,19 @@
 
 struct GameState {
     char board[ROWS][COLS];
-    int turn;          // 0 = Player 1 ('X'), 1 = Player 2 ('O')
-    bool gameOver;
-    bool gameDraw;
-    char winner;
-    int winCells[4][2]; // Stores {row, col} of the 4 winning tokens
+    int turn = 0; // 0 = Red ('X'), 1 = Yellow ('O')
+    bool gameOver = false;
+    bool gameDraw = false;
+    char winner = '.';
+    int winCells[4][2] = { {-1,-1}, {-1,-1}, {-1,-1}, {-1,-1} };
+    int redFours = 0;
+    int yellowFours = 0;
 };
 
 void initGame(GameState& g);
-
-// Pure board logic (these only need a board, which is handy for minimax)
-bool dropPiece(char board[ROWS][COLS], int col, char player);
-int checkWin(char board[ROWS][COLS], int winCells[4][2] = nullptr);
-int checkDraw(char board[ROWS][COLS]);
-
-// Plays one move for the current player; returns true if a piece was placed
-bool playTurn(GameState& g, int col);
+bool dropPiece(char board[ROWS][COLS], int col, char piece);
+int checkWin(GameState& g);
+int checkWin(const char board[ROWS][COLS]);
+int checkDraw(const char board[ROWS][COLS]);
+int countConnectFours(const char board[ROWS][COLS], char piece);
+bool playTurn(GameState& g, int col, GameRules rules = GameRules::FullBoard);
