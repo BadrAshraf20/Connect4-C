@@ -5,6 +5,7 @@ constexpr int COLS = 7;
 constexpr int CELL_SIZE = 100;
 constexpr int PADDING = 50;
 constexpr float HUMAN_TURN_TIME = 15.0f;
+constexpr int MAX_HINTS_PER_PLAYER = 2;
 
 enum class ScreenState {
     Menu,

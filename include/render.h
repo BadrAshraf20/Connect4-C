@@ -14,5 +14,6 @@ struct BoardLayout {
 
 BoardLayout getBoardLayout();
 int drawMenu(AIDifficulty& difficulty);
+// Returns: 0 = none, 1 = Play Again, 2 = Main Menu, 3 = Hint Requested
 int drawGame(const GameState& g, GameMode mode, AIDifficulty difficulty, float humanTimer,
-             const SessionScore& score, int selectedCol);
+             const SessionScore& score, int selectedCol, int hintsLeft, int hintCol);

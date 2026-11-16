@@ -20,6 +20,7 @@ namespace {
     constexpr Color YELLOW_DARK     = { 180, 83,  9,  255 };
     constexpr Color YELLOW_LIGHT    = { 253, 230, 138, 110 };
 
+    constexpr Color HINT_CYAN       = { 34,  211, 238, 255 };
     constexpr Color BTN_PRIMARY     = { 37,  99,  235, 255 };
     constexpr Color BTN_PRIM_HOVER  = { 59,  130, 246, 255 };
 
@@ -191,11 +192,12 @@ BoardLayout getBoardLayout() {
 }
 
 int drawGame(const GameState& g, GameMode mode, AIDifficulty difficulty, float humanTimer,
-             const SessionScore& score, int selectedCol) {
+             const SessionScore& score, int selectedCol, int hintsLeft, int hintCol) {
     BoardLayout layout = getBoardLayout();
     bool aiTurn = isCurrentTurnAI(g.turn, mode);
     Vector2 mouse = GetMousePosition();
-    int panelAction = 0;
+    int panelAction = 0; // 1 = Play Again, 2 = Main Menu, 3 = Hint
+    float pulse = 0.5f + 0.5f * std::sin((float)GetTime() * 6.0f);
 
     BeginDrawing();
     ClearBackground(BG_COLOR);
@@ -207,7 +209,7 @@ int drawGame(const GameState& g, GameMode mode, AIDifficulty difficulty, float h
     DrawRectangleRoundedLinesEx(panelRect, 0.05f, 16, 2.0f, BOARD_BORDER);
 
     int cx = layout.panelX + layout.panelW / 2;
-    int topY = layout.boardY + 28;
+    int topY = layout.boardY + 26;
 
     const char* gameTitle = "CONNECT 4";
     DrawText(gameTitle, cx - MeasureText(gameTitle, 34) / 2, topY, 34, RAYWHITE);
@@ -219,10 +221,10 @@ int drawGame(const GameState& g, GameMode mode, AIDifficulty difficulty, float h
                                                                TextFormat("AI VS AI (%s)", diffStr);
 
     DrawText(modeLabel, cx - MeasureText(modeLabel, 15) / 2, topY + 38, 15, SKYBLUE);
-    DrawLine(layout.panelX + 28, topY + 62, layout.panelX + layout.panelW - 28, topY + 62, BOARD_BORDER);
+    DrawLine(layout.panelX + 28, topY + 60, layout.panelX + layout.panelW - 28, topY + 60, BOARD_BORDER);
 
     // --- STATUS / WINNER SECTION ---
-    int statusY = topY + 80;
+    int statusY = topY + 74;
     if (!g.gameOver && !g.gameDraw) {
         Color activeColor = (g.turn == 0) ? RED_MAIN : YELLOW_MAIN;
         Color rimColor    = (g.turn == 0) ? RED_DARK : YELLOW_DARK;
@@ -238,7 +240,7 @@ int drawGame(const GameState& g, GameMode mode, AIDifficulty difficulty, float h
             DrawText(label, cx - MeasureText(label, 18) / 2, statusY, 18, LIGHTGRAY);
         }
 
-        drawToken(cx, statusY + 72, 34.0f, activeColor, rimColor, lightColor);
+        drawToken(cx, statusY + 64, 32.0f, activeColor, rimColor, lightColor);
 
         const char* playerStr = "RED";
         if (mode == GameMode::HumanVsAI) {
@@ -248,23 +250,50 @@ int drawGame(const GameState& g, GameMode mode, AIDifficulty difficulty, float h
         } else {
             playerStr = (g.turn == 0) ? "RED (P1)" : "YELLOW (P2)";
         }
-        DrawText(playerStr, cx - MeasureText(playerStr, 24) / 2, statusY + 120, 24, activeColor);
+        DrawText(playerStr, cx - MeasureText(playerStr, 23) / 2, statusY + 108, 23, activeColor);
 
         if (!aiTurn) {
+            // 15s Turn Countdown Bar
             float barW = (float)layout.panelW - 56.0f;
             float barH = 10.0f;
             float barX = (float)layout.panelX + 28.0f;
-            float barY = (float)statusY + 185.0f;
+            float barY = (float)statusY + 166.0f;
 
             float ratio = std::max(0.0f, humanTimer / HUMAN_TURN_TIME);
             Color timerColor = (humanTimer <= 5.0f) ? RED_MAIN : SKYBLUE;
 
             const char* timeText = TextFormat("TIME LEFT: %.1fs", std::max(0.0f, humanTimer));
-            DrawText(timeText, cx - MeasureText(timeText, 17) / 2, (int)barY - 24, 17, timerColor);
+            DrawText(timeText, cx - MeasureText(timeText, 16) / 2, (int)barY - 22, 16, timerColor);
 
             DrawRectangleRounded({ barX, barY, barW, barH }, 0.5f, 8, SLOT_EMPTY);
             if (ratio > 0.0f) {
                 DrawRectangleRounded({ barX, barY, barW * ratio, barH }, 0.5f, 8, timerColor);
+            }
+
+            // Hint Button
+            float hintW = (float)layout.panelW - 56.0f;
+            float hintH = 38.0f;
+            float hintX = (float)layout.panelX + 28.0f;
+            float hintY = barY + 22.0f;
+            Rectangle hintBtn = { hintX, hintY, hintW, hintH };
+
+            bool canUseHint = (hintsLeft > 0 && hintCol == -1);
+            bool hoverHint = canUseHint && CheckCollisionPointRec(mouse, hintBtn);
+
+            Color btnFill   = canUseHint ? (hoverHint ? CARD_HOVER : SLOT_EMPTY) : BG_COLOR;
+            Color btnBorder = (hintCol != -1) ? HINT_CYAN : (canUseHint ? (hoverHint ? HINT_CYAN : BOARD_BORDER) : BOARD_BORDER);
+            Color btnText   = (hintCol != -1) ? HINT_CYAN : (canUseHint ? RAYWHITE : GRAY);
+
+            DrawRectangleRounded(hintBtn, 0.24f, 10, btnFill);
+            DrawRectangleRoundedLinesEx(hintBtn, 0.24f, 10, 1.5f, btnBorder);
+
+            const char* hintLabel = (hintCol != -1)
+                ? TextFormat("Suggested: Col %d", hintCol + 1)
+                : TextFormat("Hint [H] (%d left)", hintsLeft);
+            DrawText(hintLabel, cx - MeasureText(hintLabel, 17) / 2, (int)hintY + 10, 17, btnText);
+
+            if (hoverHint && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                panelAction = 3;
             }
         }
     } else {
@@ -344,29 +373,43 @@ int drawGame(const GameState& g, GameMode mode, AIDifficulty difficulty, float h
     DrawRectangleRounded(boardRect, 0.04f, 16, BOARD_BODY);
     DrawRectangleRoundedLinesEx(boardRect, 0.04f, 16, 2.0f, BOARD_BORDER);
 
-    // Column Numbers (1..7) & Active Column Selector Preview
+    // Column Numbers (1..7), Hint Overlay & Active Column Selector Preview
     for (int c = 0; c < COLS; c++) {
-        int colCenterX = layout.boardX + c * layout.cellSize + layout.cellSize / 2;
+        int colX = layout.boardX + c * layout.cellSize;
+        int colCenterX = colX + layout.cellSize / 2;
         bool isSelected = (!g.gameOver && !g.gameDraw && !aiTurn && c == selectedCol);
+        bool isHinted   = (!g.gameOver && !g.gameDraw && !aiTurn && c == hintCol);
 
         const char* colNum = TextFormat("%d", c + 1);
-        Color numColor = isSelected ? RAYWHITE : GRAY;
+        Color numColor = isHinted ? HINT_CYAN : (isSelected ? RAYWHITE : GRAY);
         DrawText(colNum, colCenterX - MeasureText(colNum, 16) / 2, layout.boardY - 52, 16, numColor);
 
+        // Pulsing Cyan Column Overlay when Hinted
+        if (isHinted && g.board[0][c] == '.') {
+            Rectangle hintColRect = { (float)colX + 3, (float)layout.boardY + 2, (float)layout.cellSize - 6, (float)layout.boardH - 4 };
+            unsigned char fillAlpha = (unsigned char)(18 + 20 * pulse);
+            unsigned char lineAlpha = (unsigned char)(160 + 95 * pulse);
+            DrawRectangleRounded(hintColRect, 0.12f, 8, { 34, 211, 238, fillAlpha });
+            DrawRectangleRoundedLinesEx(hintColRect, 0.12f, 8, 2.0f, { 34, 211, 238, lineAlpha });
+
+            const char* bestTag = "BEST";
+            DrawText(bestTag, colCenterX - MeasureText(bestTag, 13) / 2, layout.boardY - 32, 13, HINT_CYAN);
+        }
+
         if (isSelected && g.board[0][c] == '.') {
-            int colX = layout.boardX + c * layout.cellSize;
             DrawRectangle(colX + 4, layout.boardY, layout.cellSize - 8, layout.boardH, { 255, 255, 255, 14 });
 
-            int previewY = layout.boardY - 24;
-            Color ghostColor = (g.turn == 0) ? RED_MAIN : YELLOW_MAIN;
-            ghostColor.a = 190;
-            DrawCircle(colCenterX, previewY, layout.cellSize * 0.16f, ghostColor);
+            if (!isHinted) {
+                int previewY = layout.boardY - 24;
+                Color ghostColor = (g.turn == 0) ? RED_MAIN : YELLOW_MAIN;
+                ghostColor.a = 190;
+                DrawCircle(colCenterX, previewY, layout.cellSize * 0.16f, ghostColor);
+            }
         }
     }
 
     // Board Grid & Tokens
     const float radius = layout.cellSize * 0.40f;
-    float pulse = 0.5f + 0.5f * std::sin((float)GetTime() * 6.0f);
 
     for (int r = 0; r < ROWS; r++) {
         for (int c = 0; c < COLS; c++) {
