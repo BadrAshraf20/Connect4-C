@@ -44,6 +44,13 @@ int main() {
     SetConfigFlags(FLAG_FULLSCREEN_MODE | FLAG_MSAA_4X_HINT);
     int monitor = GetCurrentMonitor();
     InitWindow(GetMonitorWidth(monitor), GetMonitorHeight(monitor), "Connect Four");
+    /*
+        To cancel the full-screen use that code
+    */
+    // SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
+    // InitWindow(1280, 820, "Connect Four");
+    // SetWindowMinSize(960, 680);
+    // MaximizeWindow();
     initAudio();
     SetTargetFPS(60);
 
