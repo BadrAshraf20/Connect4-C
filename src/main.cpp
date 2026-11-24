@@ -8,7 +8,14 @@
 #include <cmath>
 #include <algorithm>
 
+// Connects all parts of the project together and manages the game life cycle
+// (Game Loop) from the moment the window is opened until it is closed.
+
 namespace {
+    // Iterate through the top row of the board (`board[0][c]`), identify the
+    // columns that still have an empty space (`.`), collect them into an array.
+    // If the human player runs out of time (humanTimer <= 0) without making
+    // a move, the game automatically drops a random piece for them.
     int getRandomValidColumn(const char board[ROWS][COLS]) {
         int validCols[COLS];
         int count = 0;
@@ -21,6 +28,10 @@ namespace {
         return validCols[GetRandomValue(0, count - 1)];
     }
 
+    // returns the search tree depth (K) for the AI; if the difficulty is set
+    // to "Custom," it returns the value chosen by the user (customK).
+    // Otherwise, it converts the difficulty level (Easy=2, Medium=4, Hard=6)
+    // from enum into an integer.
     int getEffectiveDepth(AIDifficulty diff, int customK) {
         if (diff == AIDifficulty::Custom) return customK;
         return static_cast<int>(diff);
@@ -54,6 +65,8 @@ int main() {
     initAudio();
     SetTargetFPS(60);
 
+    // A simple delay timer, so the AI ​​doesn't respond in a fraction of a
+    // second—making it seem as though it’s actually thinking.
     float aiTimer = 0.0f;
     float humanTimer = HUMAN_TURN_TIME;
     int selectedCol = COLS / 2;
@@ -65,6 +78,7 @@ int main() {
     bool showTreeOverlay = false;
     float treeScrollY = 0.0f;
 
+    // It repeats 60 times per second as long as the user has the game open.
     while (!WindowShouldClose()) {
         int activeK = getEffectiveDepth(difficulty, customK);
 
@@ -74,6 +88,7 @@ int main() {
             if (IsKeyPressed(KEY_TWO))   choice = 1;
             if (IsKeyPressed(KEY_THREE)) choice = 2;
 
+            // Setting up a new game session as soon as the player selects the game mode.
             if (choice != -1) {
                 mode = (choice == 0) ? GameMode::HumanVsHuman :
                        (choice == 1) ? GameMode::HumanVsAI : GameMode::AIVsAI;
@@ -92,6 +107,7 @@ int main() {
                 screen = ScreenState::Playing;
             }
         }
+        // Manages the game cycle, the turn timer, and updates the score and hints.
         else if (screen == ScreenState::Playing) {
             bool isAITurn = (mode == GameMode::AIVsAI) ||
                             (mode == GameMode::HumanVsAI && game.turn == 1);

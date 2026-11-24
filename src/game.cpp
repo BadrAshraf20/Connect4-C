@@ -1,6 +1,10 @@
 #include "game.h"
 #include "audio.h"
 
+// Responsible for the rules of the game, the movement of pieces on the board,
+// and calculating the score.
+
+// Setting up the start of the game.
 void initGame(GameState& g) {
     for (int r = 0; r < ROWS; r++) {
         for (int c = 0; c < COLS; c++) {
@@ -19,6 +23,7 @@ void initGame(GameState& g) {
     }
 }
 
+// Dropping a piece into a column.
 bool dropPiece(char board[ROWS][COLS], int col, char piece) {
     if (col < 0 || col >= COLS) return false;
     for (int r = ROWS - 1; r >= 0; r--) {
@@ -30,6 +35,8 @@ bool dropPiece(char board[ROWS][COLS], int col, char piece) {
     return false;
 }
 
+// During actual gameplay, as soon as 4 matching elements are found,
+// record their coordinates in `g.winCells` so that the screen can highlight them.
 int checkWin(GameState& g) {
     // Horizontal
     for (int r = 0; r < ROWS; r++) {
@@ -74,6 +81,7 @@ int checkWin(GameState& g) {
     return 0;
 }
 
+// A lightweight version that only takes the board, without modifying the drawing coordinates. (Not used)
 int checkWin(const char board[ROWS][COLS]) {
     for (int r = 0; r < ROWS; r++) {
         for (int c = 0; c <= COLS - 4; c++) {
@@ -109,6 +117,7 @@ int checkDraw(const char board[ROWS][COLS]) {
     return 1;
 }
 
+// Counting the fours in a full board.
 int countConnectFours(const char board[ROWS][COLS], char piece) {
     int count = 0;
 
@@ -155,12 +164,13 @@ int countConnectFours(const char board[ROWS][COLS], char piece) {
     return count;
 }
 
+// Executing the move and updating the game state.
 bool playTurn(GameState& g, int col, GameRules rules) {
     if (g.gameOver || g.gameDraw) return false;
 
     char currentPiece = (g.turn == 0) ? 'X' : 'O';
     if (!dropPiece(g.board, col, currentPiece)) {
-        return false;
+        return false; // If the column is full, it returns false.
     }
 
     // Always update live connected-four counts

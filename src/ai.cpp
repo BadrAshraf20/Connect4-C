@@ -10,8 +10,10 @@
 namespace {
     // Search the center first: better move ordering gives more alpha-beta cutoffs
     constexpr int COL_ORDER[COLS] = { 3, 2, 4, 1, 5, 0, 6 };
+    // Limit visual/console tree logging to the top 3 levels to avoid massive output
     constexpr int MAX_PRINT_DEPTH = 3;
 
+    // Internal node structure used to build the decision tree for console and GUI display
     struct TreeNode {
         std::string label;
         int score = 0;
@@ -122,7 +124,7 @@ namespace {
             return 0;
         }
 
-        // Heuristic cutoff at depth K
+        // Heuristic cutoff when reaching search depth limit K
         if (depth == 0) {
             int val = evaluateBoard(board, aiPiece);
             if (rules == GameRules::FullBoard) {
@@ -138,6 +140,7 @@ namespace {
         bool recordChildren = (node != nullptr && treeLevel < MAX_PRINT_DEPTH);
 
         if (isMaximizing) {
+            // AI's turn (MAX): maximize score and update alpha
             int maxEval = INT_MIN;
             for (int i = 0; i < COLS; i++) {
                 int col = COL_ORDER[i];
@@ -172,6 +175,7 @@ namespace {
             if (node) node->score = maxEval;
             return maxEval;
         } else {
+            // Opponent's turn (MIN): minimize score and update beta
             int minEval = INT_MAX;
             for (int i = 0; i < COLS; i++) {
                 int col = COL_ORDER[i];
@@ -208,6 +212,7 @@ namespace {
         }
     }
 
+    // Traverses the recorded search tree to print to stdout and populate GUI overlay lines
     void collectAndPrintTree(const TreeNode& node, int currentLevel, int chosenRootCol,
                              bool printToConsole, std::vector<TreeDisplayLine>* guiLines) {
         std::string indent(currentLevel * 4, ' ');
@@ -237,6 +242,7 @@ namespace {
     }
 }
 
+// Heuristic board evaluation combining center control and all 69 4-cell windows
 int evaluateBoard(char board[ROWS][COLS], char aiPiece) {
     char oppPiece = (aiPiece == 'X') ? 'O' : 'X';
     int score = 0;
@@ -289,6 +295,7 @@ int evaluateBoard(char board[ROWS][COLS], char aiPiece) {
     return score;
 }
 
+// Entry point for the AI: evaluates all valid root moves, tracks time/nodes, and returns best column
 int getBestMove(char board[ROWS][COLS], char aiPiece, int maxDepth,
                 AIAlgorithm algo, GameRules rules, SearchStats* outStats, bool printTree) {
     // FIX: depth must be at least 1, otherwise the search never reaches depth 0
@@ -343,6 +350,7 @@ int getBestMove(char board[ROWS][COLS], char aiPiece, int maxDepth,
     const char* ruleName = (rules == GameRules::FullBoard) ? "Full Board" : "First 4";
     root.score = bestScore;
 
+    // Populate search statistics for the side panel and tree overlay
     if (outStats) {
         outStats->nodesExpanded = nodesExpanded;
         outStats->timeMs = elapsedMs;
@@ -354,6 +362,7 @@ int getBestMove(char board[ROWS][COLS], char aiPiece, int maxDepth,
         outStats->treeLines.clear();
     }
 
+    // Print summary header and decision tree to console if enabled
     if (printTree) {
         std::cout << "\n======================================================\n";
         std::cout << "Algorithm: " << algoName << " | Rules: " << ruleName << " | Depth K = " << maxDepth << "\n";
