@@ -156,9 +156,42 @@ int drawMenu(GameRules& rules, AIAlgorithm& algorithm, AIDifficulty& difficulty,
     Vector2 mouse = GetMousePosition();
     int selectedOption = -1;
 
-    if (difficulty == AIDifficulty::Custom) {
-        if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_EQUAL))   customK = std::min(10, customK + 1);
-        if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_MINUS)) customK = std::max(1, customK - 1);
+    static bool overwriteNextDigit = true;
+    if (difficulty != AIDifficulty::Custom) {
+        overwriteNextDigit = true;
+    } else {
+        if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_EQUAL) || IsKeyPressed(KEY_KP_ADD)) {
+            customK++;
+            overwriteNextDigit = true;
+        }
+        if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_MINUS) || IsKeyPressed(KEY_KP_SUBTRACT)) {
+            customK = std::max(1, customK - 1);
+            overwriteNextDigit = true;
+        }
+
+        // Direct keyboard numeric input (accepts any integer > 0)
+        int key = GetCharPressed();
+        while (key > 0) {
+            if (key >= '0' && key <= '9') {
+                int digit = key - '0';
+                if (overwriteNextDigit) {
+                    if (digit > 0) {
+                        customK = digit;
+                        overwriteNextDigit = false;
+                    }
+                } else if (customK <= 100000) {
+                    customK = customK * 10 + digit;
+                }
+            }
+            key = GetCharPressed();
+        }
+        if (IsKeyPressed(KEY_BACKSPACE)) {
+            customK /= 10;
+            if (customK < 1) {
+                customK = 1;
+                overwriteNextDigit = true;
+            }
+        }
     }
 
     bool isCustom = (difficulty == AIDifficulty::Custom);
@@ -302,6 +335,9 @@ int drawMenu(GameRules& rules, AIAlgorithm& algorithm, AIDifficulty& difficulty,
 
         if (hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             difficulty = diffs[i].level;
+            if (diffs[i].level == AIDifficulty::Custom) {
+                overwriteNextDigit = true;
+            }
         }
     }
 
@@ -311,24 +347,36 @@ int drawMenu(GameRules& rules, AIAlgorithm& algorithm, AIDifficulty& difficulty,
         DrawRectangleRounded(stepperBox, 0.22f, 10, SLOT_EMPTY);
         DrawRectangleRoundedLinesEx(stepperBox, 0.22f, 10, 1.5f, HINT_CYAN);
 
-        const char* kDesc = "Tree Cutoff Depth (K):";
-        DrawText(kDesc, (int)pillX + 18, (int)nextY + 13, 18, LIGHTGRAY);
+        const char* kDesc = "Tree Cutoff Depth (K) [Type or +/-]:";
+        DrawText(kDesc, (int)pillX + 16, (int)nextY + 14, 16, LIGHTGRAY);
 
-        Rectangle minusBtn = { pillX + pillW - 136.0f, nextY + 6.0f, 36.0f, 32.0f };
-        Rectangle plusBtn  = { pillX + pillW - 48.0f,  nextY + 6.0f, 36.0f, 32.0f };
+        Rectangle minusBtn = { pillX + pillW - 146.0f, nextY + 6.0f, 34.0f, 32.0f };
+        Rectangle plusBtn  = { pillX + pillW - 46.0f,  nextY + 6.0f, 34.0f, 32.0f };
         bool hoverMinus = CheckCollisionPointRec(mouse, minusBtn);
         bool hoverPlus  = CheckCollisionPointRec(mouse, plusBtn);
 
         DrawRectangleRounded(minusBtn, 0.25f, 8, hoverMinus ? CARD_HOVER : BOARD_BODY);
-        DrawText("-", (int)minusBtn.x + 13, (int)minusBtn.y + 5, 22, RAYWHITE);
-        if (hoverMinus && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) customK = std::max(1, customK - 1);
+        DrawText("-", (int)minusBtn.x + 12, (int)minusBtn.y + 5, 22, RAYWHITE);
+        if (hoverMinus && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            customK = std::max(1, customK - 1);
+            overwriteNextDigit = true;
+        }
 
         const char* kValStr = TextFormat("%d", customK);
-        DrawText(kValStr, (int)(pillX + pillW - 92.0f) + 18 - MeasureText(kValStr, 22) / 2, (int)nextY + 11, 22, HINT_CYAN);
+        int valW = MeasureText(kValStr, 22);
+        int valX = (int)(pillX + pillW - 79.0f) - valW / 2;
+        DrawText(kValStr, valX, (int)nextY + 11, 22, HINT_CYAN);
+
+        if (((int)(GetTime() * 2.0)) % 2 == 0) {
+            DrawRectangle(valX + valW + 3, (int)nextY + 12, 2, 20, HINT_CYAN);
+        }
 
         DrawRectangleRounded(plusBtn, 0.25f, 8, hoverPlus ? CARD_HOVER : BOARD_BODY);
-        DrawText("+", (int)plusBtn.x + 12, (int)plusBtn.y + 5, 22, RAYWHITE);
-        if (hoverPlus && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) customK = std::min(10, customK + 1);
+        DrawText("+", (int)plusBtn.x + 11, (int)plusBtn.y + 5, 22, RAYWHITE);
+        if (hoverPlus && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            customK++;
+            overwriteNextDigit = true;
+        }
 
         nextY += 54.0f;
     }
@@ -372,7 +420,9 @@ int drawMenu(GameRules& rules, AIAlgorithm& algorithm, AIDifficulty& difficulty,
         }
     }
 
-    const char* footer = "Press [1-3] to Start  |  Press [ESC] to Quit";
+    const char* footer = isCustom
+        ? "Click a Mode Card to Start  |  Press [ESC] to Quit"
+        : "Press [1-3] to Start  |  Press [ESC] to Quit";
     DrawText(footer, cx - MeasureText(footer, 16) / 2, (int)(containerY + containerH - 30), 16, GRAY);
 
     EndDrawing();

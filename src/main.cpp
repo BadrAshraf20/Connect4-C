@@ -33,7 +33,7 @@ namespace {
     // Otherwise, it converts the difficulty level (Easy=2, Medium=4, Hard=6)
     // from enum into an integer.
     int getEffectiveDepth(AIDifficulty diff, int customK) {
-        if (diff == AIDifficulty::Custom) return customK;
+        if (diff == AIDifficulty::Custom) return std::max(1, customK);
         return static_cast<int>(diff);
     }
 }
@@ -84,9 +84,11 @@ int main() {
 
         if (screen == ScreenState::Menu) {
             int choice = drawMenu(rules, algorithm, difficulty, customK);
-            if (IsKeyPressed(KEY_ONE))   choice = 0;
-            if (IsKeyPressed(KEY_TWO))   choice = 1;
-            if (IsKeyPressed(KEY_THREE)) choice = 2;
+            if (difficulty != AIDifficulty::Custom) {
+                if (IsKeyPressed(KEY_ONE))   choice = 0;
+                if (IsKeyPressed(KEY_TWO))   choice = 1;
+                if (IsKeyPressed(KEY_THREE)) choice = 2;
+            }
 
             // Setting up a new game session as soon as the player selects the game mode.
             if (choice != -1) {
